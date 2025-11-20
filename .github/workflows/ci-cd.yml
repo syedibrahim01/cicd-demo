@@ -1,21 +1,23 @@
-name: CI-CD Demo
+name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
-  ci:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
@@ -23,37 +25,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run tests
-        run: pytest
-
-  cd:
-    needs: ci
-    runs-on: ubuntu-latest
-    if: success() && github.ref == 'refs/heads/main'
-    steps:
-      - name: Install SSH client
-        run: sudo apt-get update && sudo apt-get install -y openssh-client
-
-      - name: Add SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          touch ~/.ssh/known_hosts
-          ssh-keyscan -p ${SSH_PORT:-22} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
         env:
-          SSH_PORT: ${{ secrets.SSH_PORT }}
-
-      - name: Deploy on remote server
+          PYTHONPATH: .
         run: |
-          ssh -p ${SSH_PORT:-22} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'EOF'
-          set -e
-          if [ -d "/opt/ci-cd-demo" ]; then
-            cd /opt/ci-cd-demo
-            git pull origin main || true
-          else
-            git clone https://github.com/${{ github.repository }}.git /opt/ci-cd-demo
-            cd /opt/ci-cd-demo
-          fi
-
-          chmod +x deploy.sh
-
+          pytest
