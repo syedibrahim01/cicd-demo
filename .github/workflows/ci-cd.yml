@@ -2,9 +2,8 @@ name: CI-CD Demo
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
   ci:
@@ -24,25 +23,37 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run tests
-        run: |
-          pytest
+        run: pytest
 
-  # CD: optional – triggered manually (for local deploy)
   cd:
     needs: ci
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: success() && github.ref == 'refs/heads/main'
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Install SSH client
+        run: sudo apt-get update && sudo apt-get install -y openssh-client
 
-      # Example: archive artifact that you can pull to your local server
-      - name: Create deployment package
+      - name: Add SSH key
         run: |
-          tar czf ci-cd-demo.tar.gz .
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          touch ~/.ssh/known_hosts
+          ssh-keyscan -p ${SSH_PORT:-22} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+        env:
+          SSH_PORT: ${{ secrets.SSH_PORT }}
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-cd-demo-package
-          path: ci-cd-demo.tar.gz
+      - name: Deploy on remote server
+        run: |
+          ssh -p ${SSH_PORT:-22} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'EOF'
+          set -e
+          if [ -d "/opt/ci-cd-demo" ]; then
+            cd /opt/ci-cd-demo
+            git pull origin main || true
+          else
+            git clone https://github.com/${{ github.repository }}.git /opt/ci-cd-demo
+            cd /opt/ci-cd-demo
+          fi
+
+          chmod +x deploy.sh
+
