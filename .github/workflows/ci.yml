@@ -7,7 +7,7 @@ on:
     branches: ["main"]
 
 jobs:
-  build-and-test:
+  build-test-and-push:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,3 +29,21 @@ jobs:
           PYTHONPATH: .
         run: |
           pytest -v
+
+      # Build & push Docker image to Docker Hub (only on push to main, not PRs)
+      - name: Log in to Docker Hub
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Build Docker image
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/cicd-demo:latest"
+          docker build -t "$IMAGE_NAME" .
+
+      - name: Push Docker image
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/cicd-demo:latest"
+          docker push "$IMAGE_NAME"
